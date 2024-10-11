@@ -1,9 +1,9 @@
-from hocbf_composition.barrier import Barrier
+from hocbf_composition.barriers.barrier import Barrier
 from hocbf_composition.utils.utils import *
 from LiDAR_CBF.utils.utils import *
-from LiDAR_CBF.utils.smooth_function_maker import SmoothFunction
+from LiDAR_CBF.utils.smooth_function_factory import create_smooth_function
 from LiDAR_CBF.utils.piecewise_function import DynamicPiecewiseFunction
-from hocbf_composition.dynamics import AffineInControlDynamics
+from hocbf_composition.utils.dynamics import AffineInControlDynamics
 
 
 
@@ -12,7 +12,7 @@ class LidarMap:
     def __init__(self, lidar, dynamics, cfg):
         self.lidar = lidar
         self.cfg = cfg
-        self.smooth_function = SmoothFunction(cfg, lidar.lidar_cfg.update_rate)
+        self.smooth_function = create_smooth_function(cfg, lidar.lidar_cfg.update_rate)
         self._make_time_augmented_dynamics(dynamics)
 
         assert issubclass(globals()[cfg.cbf_synthesis], CBFSynthesis), "Synthesis method not implemented for this class"
@@ -130,10 +130,18 @@ class CBFSynthesis:
     def __init__(self, lidar, cfg):
         self.lidar = lidar
         self.cfg = cfg
+        if cfg.local_normalize:
+            self.mesh = self._mesh_maker()
 
     def update(self, pos, point_cloud):
         raise NotImplementedError
 
+    def _mesh_maker(self):
+        radius = self.lidar.lidar_cfg.max_range
+        xx = torch.linspace(-radius, radius, 10)
+        yy = torch.linspace(-radius, radius, 10)
+        grid_x, grid_y = torch.meshgrid(xx, yy, indexing='ij')
+        return torch.stack([grid_x.flatten(), grid_y.flatten()], dim=-1)
 
 class EllipseCBF(CBFSynthesis):
 
@@ -145,7 +153,7 @@ class EllipseCBF(CBFSynthesis):
         else:
             ellipses_func = self._make_ellipse(point_cloud['boundary_points'], point_cloud['detected_points'])
 
-            def lvlset_generator(x, robot_indices):
+            def lvlset(x, robot_indices):
                 ellipses = ellipses_func(x, robot_indices)
                 circle = circle_func(x, robot_indices).unsqueeze(-1)
                 nan_indices = torch.repeat_interleave(torch.isnan(point_cloud['detected_points'])[robot_indices, ..., 0]
@@ -157,7 +165,15 @@ class EllipseCBF(CBFSynthesis):
                 return (softmin(torch.cat([ellipses, circle], dim=-1), self.cfg.softmin_rho, dim=-1)
                         .unsqueeze(-1))
 
-            return lvlset_generator
+            def normalized_lvlset(x, robot_indices):
+                expanded_mesh = self.mesh.unsqueeze(1).expand(-1, x.shape[1], -1)
+                expanded_pos = pos.expand(expanded_mesh.shape[0], -1, -1)
+                points = expanded_pos + expanded_mesh
+                lvlset_value = lvlset(points, robot_indices)
+                normalization_factor, _ = torch.max(lvlset_value, dim=0)
+                return lvlset(x, robot_indices) / normalization_factor.unsqueeze(0).expand(x.shape[0], -1, -1)
+
+            return normalized_lvlset if self.cfg.local_normalize else lvlset
 
     def _make_ellipse(self, maxrange, boundary):
         boundary = torch.where(torch.isnan(boundary), maxrange, boundary)
@@ -192,10 +208,15 @@ class EllipseCBF(CBFSynthesis):
         def circle(x, robot_indices):
             if robot_indices is not None:
                 selected_center = center[:, robot_indices, :]
-                return (max_range_sq - torch.norm((x - torch.repeat_interleave(selected_center,
-                                                                                 x.shape[0], dim=0)), dim=2) ** 2)
+                diff = x - torch.repeat_interleave(selected_center, x.shape[0], dim=0)
+                return max_range_sq - torch.einsum('bij,bij->bi', diff, diff)
+                # return 1 - torch.einsum('bij,bij->bi', diff, diff) / max_range_sq
+
+
             else:
-                return max_range_sq - torch.norm((x - torch.repeat_interleave(center,x.shape[0], dim=0)),dim=2) ** 2
+                diff = x - torch.repeat_interleave(center, x.shape[0], dim=0)
+                return max_range_sq - torch.einsum('bij,bij->bi', diff, diff)
+                # return 1 - torch.einsum('bij,bij->bi', diff, diff) / max_range_sq
         return circle
 
 

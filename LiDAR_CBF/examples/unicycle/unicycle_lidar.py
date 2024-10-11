@@ -25,15 +25,16 @@ torch.set_default_dtype(torch.float64)
 control_gains = dict(k1=0.2, k2=1.0, k3=2.0)
 
 # Barrier configs
-cfg = AD(softmax_rho=20.0,
-         softmin_rho=20.0,
+cfg = AD(softmax_rho=30.0,
+         softmin_rho=30.0,
          pos_barrier_rel_deg=2,
          vel_barrier_rel_deg=1,
          obstacle_alpha=[30.0],
          boundary_alpha=[1.0],
          velocity_alpha=[10],
-         memory=7,
+         memory=5,
          cbf_synthesis='EllipseCBF',
+         local_normalize=False,
          safe_dist=0.15,
          ellipse_width=0.8,
          smooth_function='SmoothStep',
@@ -69,7 +70,7 @@ make_animation = False
 
 
 # Initial Conditions
-x0 = torch.tensor([[0, -1.0, -8.5, 0.0, torch.pi / 2]])
+# x0 = torch.tensor([[0, -1.0, -8.5, 0.0, torch.pi / 2]]).repeat(goal_pos.shape[0], 1)
 x0 = torch.tensor([[0, -1.0, -8.5, 0.0, torch.pi / 2], [0, 0.0, 8.0, 0.0, -torch.pi / 2]])
 # x0 = torch.tensor([[0, -1.0, -8.5, 0.0, pi / 2], [0, -1.0, -8.5, 0.0, pi / 2]])
 
@@ -88,7 +89,7 @@ lidarmap = LidarMap(lidar, dynamics, cfg)
 # Make safety filter and assign dynamics
 safety_filter = MinIntervCFSafeControl(
     action_dim=lidarmap.dynamics.action_dim,
-    alpha=lambda x: 30 * x,
+    alpha=lambda x: 50 * x,
     params=AD(slack_gain=200,
               use_softplus=True,
               softplus_gain=2.0)
@@ -191,31 +192,31 @@ for i, idx in enumerate(robot_indices):
     fig, axs = plt.subplots(8, 1, figsize=(8, 10))
 
     # Plot trajs variables
-    axs[0].plot(time, all_trajs[idx][:, 1], label=r'$q_x$', color='red')
-    axs[0].plot(time, all_trajs[idx][:, 2], label=r'$q_y$', color='blue')
+    axs[0].plot(time, all_trajs[idx][:, 1].detach(), label=r'$q_x$', color='red')
+    axs[0].plot(time, all_trajs[idx][:, 2].detach(), label=r'$q_y$', color='blue')
     axs[0].set_ylabel(r'$q_x, q_y$', fontsize=14)
     axs[0].legend(fontsize=14)
     axs[0].tick_params(axis='x', which='both', bottom=True, top=False, labelbottom=False)
 
-    axs[1].plot(time, all_trajs[idx][:, 3], label='v', color='black')
+    axs[1].plot(time, all_trajs[idx][:, 3].detach(), label='v', color='black')
     axs[1].set_ylabel(r'$v$', fontsize=14)
 
-    axs[2].plot(time, all_trajs[i][:, 4], label='theta', color='black')
+    axs[2].plot(time, all_trajs[i][:, 4].detach(), label='theta', color='black')
     axs[2].set_ylabel(r'$\theta$', fontsize=14)
 
     # Plot actions
-    axs[3].plot(time, actions[i][:, 0], label='u_1', color='black')
+    axs[3].plot(time, actions[i][:, 0].detach(), label='u_1', color='black')
     axs[3].set_ylabel(r'$u_1$', fontsize=14)
 
-    axs[4].plot(time, actions[i][:, 1], label='u_2', color='black')
+    axs[4].plot(time, actions[i][:, 1].detach(), label='u_2', color='black')
     axs[4].set_ylabel(r'$u_2$', fontsize=14)
 
     # Plot online h
-    axs[5].plot(time, psi0[i], label='barrier', color='black')
+    axs[5].plot(time, psi0[i].detach(), label='barrier', color='black')
     axs[5].set_ylabel(r'$\psi_0$', fontsize=14)
 
     # Plot barrier values
-    axs[6].plot(time, psi1[i], label='barrier', color='black')
+    axs[6].plot(time, psi1[i].detach(), label='barrier', color='black')
     axs[6].set_ylabel(r'$\psi_1$', fontsize=14)
 
 
@@ -260,7 +261,7 @@ if make_animation:
 
     fig, ax = plt.subplots(figsize=(8, 6))
     metadata = dict(title='Movie', artist='codinglikemad')
-    writer = PillowWriter(fps=15, metadata=metadata)
+    writer = PillowWriter(fps=240, metadata=metadata)
 
     with writer.saving(fig, f'{saving_path}/contour_plot_animation_{current_time}.gif', 100):
         times = all_trajs[0][..., 0]
