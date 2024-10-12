@@ -56,8 +56,8 @@ timestep = 0.01
 sim_time = 10
 
 # Goal positions
-goal_pos = torch.tensor(
-    [[3.0, 4.5]])
+# goal_pos = torch.tensor(
+#     [[3.0, 4.5]])
 
 goal_pos = torch.tensor(
     [[3.0, 4.5], [-5.0, 0.0]])
@@ -71,7 +71,7 @@ make_animation = False
 
 # Initial Conditions
 # x0 = torch.tensor([[0, -1.0, -8.5, 0.0, torch.pi / 2]]).repeat(goal_pos.shape[0], 1)
-x0 = torch.tensor([[0, -1.0, -8.5, 0.0, torch.pi / 2], [0, 0.0, 8.0, 0.0, -torch.pi / 2]])
+x0 = torch.tensor([[0, -1.0, -8.5, 0.0, torch.pi / 2], [0, 0.0, 8.0, 0.0, -torch.pi / 2]], dtype=torch.float64)
 # x0 = torch.tensor([[0, -1.0, -8.5, 0.0, pi / 2], [0, -1.0, -8.5, 0.0, pi / 2]])
 
 
@@ -122,7 +122,7 @@ print(time() - start_time)
 all_trajs = torch.cat(all_trajs, dim=0)
 all_trajs = [torch.vstack(t.split(lidarmap.dynamics.state_dim)) for t in torch.hstack([tt for tt in all_trajs])]
 
-lidarmap.make_piecewise_barrier(robot_indices=robot_indices)
+pw_barrier = lidarmap.make_piecewise_barrier(robot_indices=robot_indices)
 
 
 
@@ -133,7 +133,7 @@ constraint_val = []
 psi0 = []
 psi1 = []
 for i, idx in enumerate(robot_indices):
-    safety_filter.assign_state_barrier(lidarmap.pw_barrier[i])
+    safety_filter.assign_state_barrier(pw_barrier[i])
     des_ctrl = lambda x: vectorize_tensors(
         partial(desired_control, goal_pos=goal_pos[i].repeat(x.shape[0], 1), **control_gains)(x[..., 1:]))
     safety_filter.assign_desired_control(

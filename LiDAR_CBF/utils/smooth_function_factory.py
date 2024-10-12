@@ -1,6 +1,6 @@
 from math import comb
 import torch
-from hocbf_composition.utils.utils import mod
+from LiDAR_CBF.utils.utils import mod
 
 
 def create_smooth_function(cfg, period):

@@ -75,7 +75,7 @@ class Lidar:
         change_indices = torch.nonzero(sign_change, as_tuple=True)
 
         boundary_points = reshaped_mesh[:, :, -1, :]
-        detected_points = torch.full(reshaped_mesh[:, :, -1, :].shape, float('nan'))
+        detected_points = torch.full(reshaped_mesh[:, :, -1, :].shape, float('nan'), dtype=torch.float64)
 
         if change_indices[0].numel() > 0:
             # Find unique ray indices

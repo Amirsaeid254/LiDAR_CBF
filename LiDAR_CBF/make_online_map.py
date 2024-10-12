@@ -91,7 +91,7 @@ class LidarMap:
 
         buffer_len = len(self.buffer)
         memory_size = self.cfg.memory
-        self.pw_barrier = []
+        pw_barrier = []
 
         for i in robot_indices:
             pos_pw_barrierfunc = DynamicPiecewiseFunction(self.lidar.lidar_cfg.update_rate)
@@ -120,7 +120,9 @@ class LidarMap:
                 .assign_dynamics(dynamics)
             )
 
-            self.pw_barrier.append(barrier)
+            pw_barrier.append(barrier)
+
+        return pw_barrier
 
 
 

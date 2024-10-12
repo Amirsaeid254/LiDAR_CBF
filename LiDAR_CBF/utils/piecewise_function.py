@@ -1,4 +1,6 @@
 import torch
+from triton.language import dtype
+
 
 class DynamicPiecewiseFunction:
     def __init__(self, period):
@@ -43,8 +45,8 @@ class DynamicPiecewiseFunction:
         def cond(t):
             # return (t >= k * self.period) & (t <= (k + 1) * self.period)
 
-            lower_bound = torch.tensor(k * self.period)
-            upper_bound = torch.tensor((k + 1) * self.period)
+            lower_bound = torch.tensor(k * self.period, dtype=torch.float64)
+            upper_bound = torch.tensor((k + 1) * self.period, dtype=torch.float64)
 
             lower_check = torch.isclose(t, lower_bound, atol=1e-8) | (t > lower_bound)
             upper_check = torch.isclose(t, upper_bound, atol=1e-8) | (t < upper_bound)
